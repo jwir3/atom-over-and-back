@@ -7,5 +7,5 @@ Simple back-and-forth file history for the Atom text editor.
 
 Usage
 ----
-`⌘-[`: Move to last file location
-`⌘-]`: Move to next file location (after having navigated back)
+  - `⌘-[`: Move to last file location
+  - `⌘-]`: Move to next file location (after having navigated back)
