@@ -1,0 +1,11 @@
+{
+  "atom-workspace atom-text-editor:not([mini])": {
+    "cmd-[": "unset!",
+    "cmd-]": "unset!"
+  },
+
+  "atom-workspace": {
+    "cmd-[": "atom-over-and-back:navigate-backward",
+    "cmd-]": "atom-over-and-back:navigate-forward"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "context-menu": {
+    "atom-text-editor": [
+      {
+        "label": "Enable or Disable Over-and-Back",
+        "command": "atom-over-and-back:toggle"
+      }
+    ]
+  },
+  "menu": [
+    {
+      "label": "Packages",
+      "submenu": [
+        {
+          "label": "Over-and-Back",
+          "submenu": [
+            {
+              "label": "Toggle",
+              "command": "atom-over-and-back:toggle"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
