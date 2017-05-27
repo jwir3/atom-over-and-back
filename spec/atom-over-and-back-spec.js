@@ -1,72 +1,172 @@
 'use babel';
 
 import AtomOverAndBack from '../lib/atom-over-and-back';
+import { FixtureLoader } from './utils';
+
+function getEditorWithGreekLetters() {
+  for (let teIdx in atom.workspace.getTextEditors()) {
+    let nextEditor = atom.workspace.getTextEditors()[teIdx];
+    if (nextEditor.getTitle() == 'greek-letters.txt') {
+      return nextEditor;
+    }
+  }
+
+  return null;
+}
 
 // Use the command `window:run-package-specs` (cmd-alt-ctrl-p) to run specs.
 //
 // To run a specific `it` or `describe` block add an `f` to the front (e.g. `fit`
 // or `fdescribe`). Remove the `f` to unfocus the block.
 
-describe('AtomOverAndBack', () => {
-  let workspaceElement, activationPromise;
+describe('when the test framework is set up', () => {
+  let workspaceElement, activationPromise, fixtureLoader, fixtureFileData;
 
   beforeEach(() => {
     workspaceElement = atom.views.getView(atom.workspace);
     activationPromise = atom.packages.activatePackage('atom-over-and-back');
-  });
+    fixtureLoader = new FixtureLoader((fileData) => {
+      fixtureFileData = fileData;
+    });
 
-  describe('when the atom-over-and-back:toggle event is triggered', () => {
-    it('hides and shows the modal panel', () => {
-      // Before the activation event the view is not on the DOM, and no panel
-      // has been created
-      expect(workspaceElement.querySelector('.atom-over-and-back')).not.toExist();
+    waitsForPromise(() => {
+      return fixtureLoader.getPromise().then(() => {
+        let keys = Object.keys(fixtureFileData);
+        let paths = [];
+        for (let keyIdx in keys) {
+          paths.push(fixtureFileData[keys[keyIdx]].path);
+        }
 
-      // This is an activation event, triggering it will cause the package to be
-      // activated.
-      atom.commands.dispatch(workspaceElement, 'atom-over-and-back:toggle');
-
-      waitsForPromise(() => {
-        return activationPromise;
-      });
-
-      runs(() => {
-        expect(workspaceElement.querySelector('.atom-over-and-back')).toExist();
-
-        let atomOverAndBackElement = workspaceElement.querySelector('.atom-over-and-back');
-        expect(atomOverAndBackElement).toExist();
-
-        let atomOverAndBackPanel = atom.workspace.panelForItem(atomOverAndBackElement);
-        expect(atomOverAndBackPanel.isVisible()).toBe(true);
-        atom.commands.dispatch(workspaceElement, 'atom-over-and-back:toggle');
-        expect(atomOverAndBackPanel.isVisible()).toBe(false);
+        for (let pathIdx in paths) {
+          let nextPath = paths[pathIdx];
+          let numOpenTabs = 0;
+          waitsForPromise(() => {
+            return atom.workspace.open(nextPath);
+          });
+        }
       });
     });
 
-    it('hides and shows the view', () => {
-      // This test shows you an integration test testing at the view level.
+    waitsForPromise(() => {
+      return activationPromise;
+    });
+  });
 
-      // Attaching the workspaceElement to the DOM is required to allow the
-      // `toBeVisible()` matchers to work. Anything testing visibility or focus
-      // requires that the workspaceElement is on the DOM. Tests that attach the
-      // workspaceElement to the DOM are generally slower than those off DOM.
-      jasmine.attachToDOM(workspaceElement);
+  it ('should open each of the files in the fixtures directory as a new text editor', () => {
+    jasmine.attachToDOM(workspaceElement);
 
-      expect(workspaceElement.querySelector('.atom-over-and-back')).not.toExist();
+    expect(atom.workspace.getTextEditors().length).toBe(1);
 
-      // This is an activation event, triggering it causes the package to be
-      // activated.
-      atom.commands.dispatch(workspaceElement, 'atom-over-and-back:toggle');
+    expect(getEditorWithGreekLetters()).not.toBe(null);
+    expect(getEditorWithGreekLetters().getLineCount()).toBe(11);
+  });
 
-      waitsForPromise(() => {
-        return activationPromise;
+  it ('should not add a waypoint when navigating if the plugin is disabled', () => {
+    jasmine.attachToDOM(workspaceElement);
+
+    let overAndBack = atom.packages.getActivePackage('atom-over-and-back');
+    expect(overAndBack).toBeDefined();
+    expect(overAndBack.mainModule.isEnabled()).toBe(true);
+
+    atom.commands.dispatch(workspaceElement, 'atom-over-and-back:toggle');
+    expect(overAndBack.mainModule.isEnabled()).toBe(false);
+    expect(overAndBack.mainModule.getNumWaypoints()).toBe(0);
+
+    var greekLetterEditor = getEditorWithGreekLetters();
+    greekLetterEditor.moveDown(6);
+    expect(overAndBack.mainModule.getNumWaypoints()).toBe(0);
+  });
+
+  it ('should add a waypoint when navigating > 5 lines if the plugin is enabled', () => {
+    jasmine.attachToDOM(workspaceElement);
+
+    let overAndBack = atom.packages.getActivePackage('atom-over-and-back');
+    overAndBack.mainModule.setEnabled(true);
+    expect(overAndBack).toBeDefined();
+    expect(overAndBack.mainModule.isEnabled()).toBe(true);
+
+    var greekLetterEditor = getEditorWithGreekLetters();
+    greekLetterEditor.moveDown(6);
+
+    expect(overAndBack.mainModule.getNumWaypoints()).toBe(1);
+  });
+
+  it ("should not navigate backwards if there are no waypoints", () => {
+    jasmine.attachToDOM(workspaceElement);
+
+    let overAndBack = atom.packages.getActivePackage('atom-over-and-back');
+    overAndBack.mainModule.setEnabled(true);
+    expect(overAndBack).toBeDefined();
+    expect(overAndBack.mainModule.isEnabled()).toBe(true);
+
+    var greekLetterEditor = getEditorWithGreekLetters();
+    var originalPosition = greekLetterEditor.getCursorBufferPosition();
+    waitsForPromise(() => {
+      return overAndBack.mainModule.navigateBackward().catch((reason) => {
+        expect(reason).toBe('no waypoints backward');
       });
+    });
+  });
 
-      runs(() => {
-        // Now we can test for view visibility
-        let atomOverAndBackElement = workspaceElement.querySelector('.atom-over-and-back');
-        expect(atomOverAndBackElement).toBeVisible();
-        atom.commands.dispatch(workspaceElement, 'atom-over-and-back:toggle');
-        expect(atomOverAndBackElement).not.toBeVisible();
+  it ("should navigate backwards if there is a valid waypoint and it's requested", () => {
+    jasmine.attachToDOM(workspaceElement);
+
+    let overAndBack = atom.packages.getActivePackage('atom-over-and-back');
+    overAndBack.mainModule.setEnabled(true);
+    expect(overAndBack).toBeDefined();
+    expect(overAndBack.mainModule.isEnabled()).toBe(true);
+
+    var greekLetterEditor = getEditorWithGreekLetters();
+    var originalPosition = greekLetterEditor.getCursorBufferPosition();
+    greekLetterEditor.moveDown(10);
+    expect(greekLetterEditor.getCursorBufferPosition().row).toBe(10);
+    expect(overAndBack.mainModule.getNumWaypoints()).toBe(1);
+    waitsForPromise(() => {
+      return overAndBack.mainModule.navigateBackward().then(() => {
+        expect(originalPosition.row).toBe(greekLetterEditor.getCursorBufferPosition().row);
+      });
+    });
+  });
+
+  it ("should not be able to navigate forward if there are no waypoints", () => {
+    jasmine.attachToDOM(workspaceElement);
+
+    let overAndBack = atom.packages.getActivePackage('atom-over-and-back');
+    overAndBack.mainModule.setEnabled(true);
+    expect(overAndBack).toBeDefined();
+    expect(overAndBack.mainModule.isEnabled()).toBe(true);
+
+    var greekLetterEditor = getEditorWithGreekLetters();
+    var originalPosition = greekLetterEditor.getCursorBufferPosition();
+    waitsForPromise(() => {
+      return overAndBack.mainModule.navigateForward().catch((reason) => {
+        expect(reason).toBe('no waypoints forward');
+      });
+    });
+  });
+
+  it ("should be able to navigate forward after having navigated backward", () => {
+    jasmine.attachToDOM(workspaceElement);
+
+    let overAndBack = atom.packages.getActivePackage('atom-over-and-back');
+    overAndBack.mainModule.setEnabled(true);
+    expect(overAndBack).toBeDefined();
+    expect(overAndBack.mainModule.isEnabled()).toBe(true);
+
+    var greekLetterEditor = getEditorWithGreekLetters();
+    var originalPosition = greekLetterEditor.getCursorBufferPosition();
+    greekLetterEditor.moveDown(10);
+    expect(greekLetterEditor.getCursorBufferPosition().row).toBe(10);
+    expect(overAndBack.mainModule.getNumWaypoints()).toBe(1);
+    waitsForPromise(() => {
+      return overAndBack.mainModule.navigateBackward().then(() => {
+        expect(originalPosition.row).toBe(greekLetterEditor.getCursorBufferPosition().row);
+        expect(overAndBack.mainModule.getNumWaypoints()).toBe(1);
+        waitsForPromise(() => {
+            return overAndBack.mainModule.navigateForward().then(() => {
+              expect(greekLetterEditor.getCursorBufferPosition().row).toBe(10);
+            });
+        });
       });
     });
   });
