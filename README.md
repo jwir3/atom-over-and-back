@@ -1,9 +1,9 @@
 Over and Back
 ==============
 
-Simple back-and-forth file history for the Atom text editor.
+Simple back-and-forth file history for the Atom text editor, IntelliJ-style.
 
-![Screenshot](https://github.com/jwir3/atom-over-and-back/blob/master/images/over-and-back-demo.gif)
+![demo](https://github.com/jwir3/atom-over-and-back/blob/master/over-and-back-demo.gif?raw=true)
 
 Usage
 ----
