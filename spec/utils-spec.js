@@ -9,15 +9,14 @@ describe('when the fixture loader is intialized', () => {
     });
   });
 
-  it('should have loaded a single fixture file named "greek-letters"', () => {
+  it('should have loaded three fixture files', () => {
     waitsForPromise(() => {
       return fixtureLoader.getPromise();
     });
 
     runs(() => {
       let keys = Object.keys(fixtureFileData);
-      expect(keys).toHaveLength(1);
-      expect(keys[0]).toEqual("greek-letters");
+      expect(keys).toHaveLength(3);
     });
   });
 });
