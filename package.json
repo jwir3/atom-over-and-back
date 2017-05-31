@@ -3,7 +3,13 @@
   "main": "./lib/atom-over-and-back",
   "version": "0.2.1",
   "description": "A plugin that adds navigate forward and back functionality similar to that in IntelliJ products",
-  "keywords": [],
+  "keywords": [
+    "history",
+    "back",
+    "forth",
+    "navigation",
+    "position"
+  ],
   "repository": "https://github.com/jwir3/atom-over-and-back",
   "license": "MIT",
   "engines": {
