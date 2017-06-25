@@ -1,6 +1,7 @@
 'use babel';
 
 import AtomOverAndBack from '../lib/atom-over-and-back';
+import Waypoint from '../lib/Waypoint';
 import { FixtureLoader } from './utils';
 
 let workspaceElement, activationPromise, fixtureLoader, fixtureFileData;
@@ -227,6 +228,8 @@ describe('basic functionality', () => {
     ravenEditor.moveDown(24);
     ravenEditor.moveDown(34);
 
+    expect(overAndBack.getNumWaypoints()).toBe(3);
+
     waitsForPromise(() => {
       return overAndBack.navigateBackward().then(() => {
         expect(ravenEditor.getCursorBufferPosition().row).toBe(44);
@@ -335,5 +338,77 @@ describe('basic functionality', () => {
         });
       });
     });
+  });
+});
+
+describe('waypoint coalescing functionality', () => {
+  beforeEach(() => {
+    setupTestFramework();
+  });
+
+  it('should merge two waypoints iff they differ by less than one line', () => {
+    let waypoint1 = new Waypoint('blah.txt', 1);
+    let waypoint2 = null;
+
+    let merged = Waypoint.merge(waypoint1, waypoint2);
+    expect(merged).not.toBe(null);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].equals(waypoint1)).toBe(true);
+
+    waypoint1 = null;
+    waypoint2 = new Waypoint('helloWorld.txt', 15);
+    merged = Waypoint.merge(waypoint1, waypoint2);
+    expect(merged).not.toBe(null);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].equals(waypoint2)).toBe(true);
+
+    waypoint1 = new Waypoint('nothing.txt', 17);;
+    waypoint2 = new Waypoint('helloWorld.txt', 15);
+    merged = Waypoint.merge(waypoint1, waypoint2);
+    expect(merged).not.toBe(null);
+    expect(merged).toHaveLength(2);
+    expect(merged[0].equals(waypoint1)).toBe(true);
+    expect(merged[1].equals(waypoint2)).toBe(true);
+
+    waypoint1 = new Waypoint('helloWorld.txt', 14);;
+    waypoint2 = new Waypoint('helloWorld.txt', 15);
+    merged = Waypoint.merge(waypoint1, waypoint2);
+    expect(merged).not.toBe(null);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].equals(waypoint2)).toBe(true);
+
+    waypoint1 = new Waypoint('helloWorld.txt', 17);;
+    waypoint2 = new Waypoint('helloWorld.txt', 16);
+    merged = Waypoint.merge(waypoint1, waypoint2);
+    expect(merged).not.toBe(null);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].equals(waypoint2)).toBe(true);
+  });
+
+  it ('should coalesce consecutive lines into a single waypoint', () => {
+    jasmine.attachToDOM(workspaceElement);
+
+    let overAndBack = atom.packages.getActivePackage('atom-over-and-back').mainModule;
+    expect(overAndBack).toBeDefined();
+
+    let ravenEditor = getEditorWithTheRaven();
+    expect(overAndBack.getNumWaypoints()).toBe(0);
+
+    overAndBack.setEnabled(false);
+    ravenEditor.moveToBottom();
+    overAndBack.setEnabled(true);
+    ravenEditor.moveToTop();
+    ravenEditor.moveDown(1);
+    ravenEditor.moveDown(1);
+    ravenEditor.moveDown(1);
+    ravenEditor.moveDown(1);
+    ravenEditor.moveDown(1);
+    ravenEditor.moveDown(1);
+    ravenEditor.moveDown(1);
+    ravenEditor.moveDown(1);
+
+    expect(overAndBack.getNumWaypoints()).toBe(2);
+    expect(ravenEditor.getCursorBufferPosition().row).toBe(8);
+    expect(overAndBack.peekWaypoint().lineNumber).toBe(0);
   });
 });
