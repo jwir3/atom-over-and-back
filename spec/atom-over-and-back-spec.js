@@ -72,6 +72,7 @@ function setupTestFramework() {
     return activationPromise;
   });
 }
+
 // Use the command `window:run-package-specs` (cmd-alt-ctrl-p) to run specs.
 //
 // To run a specific `it` or `describe` block add an `f` to the front (e.g. `fit`
@@ -339,6 +340,92 @@ describe('basic functionality', () => {
       });
     });
   });
+
+  it ('should be able to navigate forward between a named file and an unnamed file', () => {
+    jasmine.attachToDOM(workspaceElement);
+
+    let overAndBack = atom.packages.getActivePackage('atom-over-and-back').mainModule;
+    expect(overAndBack).toBeDefined();
+
+    overAndBack.setEnabled(false);
+
+    let greekLetterEditor = getEditorWithGreekLetters();
+
+    waitsForPromise(() => {
+      return atom.workspace.open().then((editor) => {
+        editor.setText(`Some folks say that I've got the perfect life
+Three swell kids, lots of toys and a lovely wife
+I fly, I sail, I throw caution to the wind
+Drift like a stratus cloud above the Caribbean
+But every now and then, the dragons come to call
+Just when you least expect it you'll be dodgin' cannonballs
+I've seen too much not to stay in touch
+With a world full of love and luck
+I've got a big suspicion 'bout ammunition
+I never forget to duck
+Come back, come back back to Jamaica
+Don't chu know we made a big mistaica
+We'd be so sad if you told us good-bye
+And we promise not to shoot you out of the sky
+It was a beautiful day, the kind you want to toast
+We were tree top flyin' movin' west along the coast
+Then we landed in the water, just about my favorite thrill
+When some asshole started firing as we taxied to Negril
+Just about to lose my temper as I endeavored to explain
+We had only come for chicken we were not a ganja plane
+Well, you should have seen their faces when they finally realized
+We were not some coked up cowboy sporting guns and alibis
+Come back, come back back to Jamaica
+Don't chu know we made a big mistaica
+We'd be so sad if you told us good-bye
+And we promise not to shoot you out of the sky
+They shot from the lighthouse, they shot from highway
+They shot from the top of the cliff, they had all gone haywire
+We're catchin' fire, and there wasn't even a spliff
+Well, the word got out all over the island
+Friends, strangers, they were all apologizin'
+Some thought me crazy foe being way too nice
+But it's just another shitty day in paradise
+Come back, come back back to Jamaica
+Don't chu know we made a big mistaica
+We'd be so sad if you told us good-bye
+And we promise not to shoot you out of the sky`);
+
+        expect(editor).toBe(atom.workspace.getActiveTextEditor());
+
+        editor.moveToTop();
+
+        overAndBack.setEnabled(true);
+
+        editor.moveDown(15);
+
+        waitsForPromise(() => {
+          return atom.workspace.open(greekLetterEditor.getPath(), {
+            'initialLine': 7
+          }).then(() => {
+            expect(overAndBack.getNumWaypoints()).toBe(2);
+
+            waitsForPromise(() => {
+              return overAndBack.navigateBackward().then(() => {
+                let currentEditor = atom.workspace.getActiveTextEditor();
+                expect(currentEditor.getCursorBufferPosition().row).toBe(15);
+                expect(currentEditor.lineTextForBufferRow(currentEditor.getCursorBufferPosition().row)).toBe("We were tree top flyin' movin' west along the coast");
+
+                waitsForPromise(() => {
+                  return overAndBack.navigateForward().then(() => {
+                    let newCurEditor = atom.workspace.getActiveTextEditor();
+
+                    expect(newCurEditor.getCursorBufferPosition().row).toBe(7);
+                    expect(newCurEditor.getPath()).toBe(greekLetterEditor.getPath());
+                  });
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+  });
 });
 
 describe('waypoint coalescing functionality', () => {
@@ -347,7 +434,7 @@ describe('waypoint coalescing functionality', () => {
   });
 
   it('should merge two waypoints iff they differ by less than one line', () => {
-    let waypoint1 = new Waypoint('blah.txt', 1);
+    let waypoint1 = new Waypoint('blah.txt', -1, 1);
     let waypoint2 = null;
 
     let merged = Waypoint.merge(waypoint1, waypoint2);
@@ -356,29 +443,29 @@ describe('waypoint coalescing functionality', () => {
     expect(merged[0].equals(waypoint1)).toBe(true);
 
     waypoint1 = null;
-    waypoint2 = new Waypoint('helloWorld.txt', 15);
+    waypoint2 = new Waypoint('helloWorld.txt', -1, 15);
     merged = Waypoint.merge(waypoint1, waypoint2);
     expect(merged).not.toBe(null);
     expect(merged).toHaveLength(1);
     expect(merged[0].equals(waypoint2)).toBe(true);
 
-    waypoint1 = new Waypoint('nothing.txt', 17);;
-    waypoint2 = new Waypoint('helloWorld.txt', 15);
+    waypoint1 = new Waypoint('nothing.txt', -1, 17);;
+    waypoint2 = new Waypoint('helloWorld.txt', -1, 15);
     merged = Waypoint.merge(waypoint1, waypoint2);
     expect(merged).not.toBe(null);
     expect(merged).toHaveLength(2);
     expect(merged[0].equals(waypoint1)).toBe(true);
     expect(merged[1].equals(waypoint2)).toBe(true);
 
-    waypoint1 = new Waypoint('helloWorld.txt', 14);;
-    waypoint2 = new Waypoint('helloWorld.txt', 15);
+    waypoint1 = new Waypoint('helloWorld.txt', -1, 14);;
+    waypoint2 = new Waypoint('helloWorld.txt', -1, 15);
     merged = Waypoint.merge(waypoint1, waypoint2);
     expect(merged).not.toBe(null);
     expect(merged).toHaveLength(1);
     expect(merged[0].equals(waypoint2)).toBe(true);
 
-    waypoint1 = new Waypoint('helloWorld.txt', 17);;
-    waypoint2 = new Waypoint('helloWorld.txt', 16);
+    waypoint1 = new Waypoint('helloWorld.txt', -1, 17);;
+    waypoint2 = new Waypoint('helloWorld.txt', -1, 16);
     merged = Waypoint.merge(waypoint1, waypoint2);
     expect(merged).not.toBe(null);
     expect(merged).toHaveLength(1);
