@@ -1,7 +1,7 @@
 {
   "name": "atom-over-and-back",
   "main": "./lib/atom-over-and-back",
-  "version": "0.4.2",
+  "version": "0.4.0",
   "description": "A plugin that adds navigate forward and back functionality similar to that in IntelliJ products",
   "keywords": [
     "history",
