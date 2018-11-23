@@ -6,6 +6,19 @@ import { FixtureLoader } from './utils';
 
 let workspaceElement, activationPromise, fixtureLoader, fixtureFileData;
 
+function initAndCheckOverAndBackModule() {
+  jasmine.attachToDOM(workspaceElement);
+
+  let overAndBack = atom.packages.getActivePackage('atom-over-and-back').mainModule;
+  expect(overAndBack).toBeDefined();
+  expect(overAndBack.isEnabled()).toBe(true);
+  expect(overAndBack.getNumWaypoints()).toBe(0);
+
+  overAndBack.setEnabled(false);
+
+  return overAndBack;
+}
+
 function getEditorForFile(filename) {
   let overAndBack = atom.packages.getActivePackage('atom-over-and-back').mainModule;
   let wasEnabled = overAndBack.isEnabled();
@@ -13,6 +26,7 @@ function getEditorForFile(filename) {
   for (let teIdx in atom.workspace.getTextEditors()) {
     let nextEditor = atom.workspace.getTextEditors()[teIdx];
     if (nextEditor.getTitle() == filename) {
+      atom.workspace.getActivePane().activateItemAtIndex(teIdx);
       overAndBack.setEnabled(wasEnabled);
       return nextEditor;
     }
@@ -72,11 +86,11 @@ function setupTestFramework() {
     return activationPromise;
   });
 }
+
 // Use the command `window:run-package-specs` (cmd-alt-ctrl-p) to run specs.
 //
 // To run a specific `it` or `describe` block add an `f` to the front (e.g. `fit`
 // or `fdescribe`). Remove the `f` to unfocus the block.
-
 describe('when the test framework is set up', () => {
   beforeEach(() => {
     setupTestFramework();
@@ -98,240 +112,382 @@ describe('when the test framework is set up', () => {
   });
 });
 
-describe('basic functionality', () => {
+describe('when overAndBack module is initialized', () => {
+  let overAndBack = null;
+
   beforeEach(() => {
     setupTestFramework();
-  });
 
-  it ('should not add a waypoint when navigating if the plugin is disabled', () => {
-    jasmine.attachToDOM(workspaceElement);
+    waitsFor(() => {
+      return atom.packages.getActivePackage('atom-over-and-back') !=  null;
+    });
 
-    let overAndBack = atom.packages.getActivePackage('atom-over-and-back').mainModule;
-    expect(overAndBack.isEnabled()).toBe(true);
-    expect(overAndBack.getNumWaypoints()).toBe(0);
+    runs (() => {
+      overAndBack = initAndCheckOverAndBackModule();
 
-    atom.commands.dispatch(workspaceElement, 'atom-over-and-back:toggle');
-    expect(overAndBack.isEnabled()).toBe(false);
-    expect(overAndBack.getNumWaypoints()).toBe(0);
-
-    var greekLetterEditor = getEditorWithGreekLetters();
-    greekLetterEditor.moveDown(6);
-    expect(overAndBack.getNumWaypoints()).toBe(0);
-  });
-
-  it ('should add a waypoint when navigating > 5 lines if the plugin is enabled', () => {
-    jasmine.attachToDOM(workspaceElement);
-
-    let overAndBack = atom.packages.getActivePackage('atom-over-and-back').mainModule;
-    overAndBack.setEnabled(true);
-    expect(overAndBack.isEnabled()).toBe(true);
-
-    var greekLetterEditor = getEditorWithGreekLetters();
-    greekLetterEditor.moveDown(6);
-
-    expect(overAndBack.getNumWaypoints()).toBe(1);
-  });
-
-  it ("should not navigate backwards if there are no waypoints", () => {
-    jasmine.attachToDOM(workspaceElement);
-
-    let overAndBack = atom.packages.getActivePackage('atom-over-and-back');
-    overAndBack.mainModule.setEnabled(true);
-    expect(overAndBack).toBeDefined();
-    expect(overAndBack.mainModule.isEnabled()).toBe(true);
-
-    var greekLetterEditor = getEditorWithGreekLetters();
-    var originalPosition = greekLetterEditor.getCursorBufferPosition();
-    waitsForPromise(() => {
-      return overAndBack.mainModule.navigateBackward().catch((reason) => {
-        expect(reason).toBe('no waypoints backward');
-      });
+      overAndBack.setEnabled(true);
+      expect(overAndBack.isEnabled()).toBe(true);
     });
   });
 
-  it ("should navigate backwards if there is a valid waypoint and it's requested", () => {
-    jasmine.attachToDOM(workspaceElement);
+  describe ('with a single editor containing The Raven', () => {
+    let ravenEditor = null;
 
-    let overAndBack = atom.packages.getActivePackage('atom-over-and-back').mainModule;
-    overAndBack.setEnabled(true);
-    expect(overAndBack.isEnabled()).toBe(true);
+    beforeEach(() => {
+      ravenEditor = getEditorWithTheRaven();
+    });
 
-    var greekLetterEditor = getEditorWithGreekLetters();
-    greekLetterEditor.moveToTop();
-    greekLetterEditor.moveDown(10);
-    greekLetterEditor.moveUp(6);
-    greekLetterEditor.moveDown(6);
-    expect(greekLetterEditor.getCursorBufferPosition().row).toBe(10);
-    expect(overAndBack.getNumWaypoints()).toBe(3);
-    waitsForPromise(() => {
-      return overAndBack.navigateBackward().then(() => {
-        expect(greekLetterEditor.getCursorBufferPosition().row).toBe(4);
+    describe ('with 3 valid waypoints', () => {
+      beforeEach(() => {
+        ravenEditor.moveDown(20);
+        ravenEditor.moveDown(24);
+        ravenEditor.moveDown(34);
+
+        expect(overAndBack.getNumWaypoints()).toBe(3);
+      });
+
+      describe ('with a single backwards navigation', () => {
+        beforeEach(() => {
+          waitsForPromise(() => {
+            return overAndBack.navigateBackward();
+          });
+        });
+
+        describe ('with a single forwards navigation', () => {
+          beforeEach(() => {
+            expect(ravenEditor.getCursorBufferPosition().row).toBe(44);
+
+            waitsForPromise(() => {
+              return overAndBack.navigateForward();
+            });
+          });
+
+          describe ('with a single backwards navigation', () => {
+            beforeEach(() => {
+              expect(ravenEditor.getCursorBufferPosition().row).toBe(78);
+
+              waitsForPromise(() => {
+                return overAndBack.navigateBackward();
+              });
+            });
+
+            describe ('with a single backwards navigation', () => {
+              beforeEach(() => {
+                waitsForPromise(() => {
+                  return overAndBack.navigateBackward();
+                });
+              });
+
+              it ('should report being on row 20 of the editor with The Raven', () => {
+                expect(ravenEditor.getCursorBufferPosition().row).toBe(20);
+              });
+            });
+          });
+        });
       });
     });
-  });
 
-  it ("should not be able to navigate forward if there are no waypoints", () => {
-    jasmine.attachToDOM(workspaceElement);
-
-    let overAndBack = atom.packages.getActivePackage('atom-over-and-back');
-    overAndBack.mainModule.setEnabled(true);
-    expect(overAndBack).toBeDefined();
-    expect(overAndBack.mainModule.isEnabled()).toBe(true);
-
-    var greekLetterEditor = getEditorWithGreekLetters();
-    var originalPosition = greekLetterEditor.getCursorBufferPosition();
-    waitsForPromise(() => {
-      return overAndBack.mainModule.navigateForward().catch((reason) => {
-        expect(reason).toBe('no waypoints forward');
-      });
-    });
-  });
-
-  it ("should be able to navigate forward after having navigated backward", () => {
-    jasmine.attachToDOM(workspaceElement);
-
-    let overAndBack = atom.packages.getActivePackage('atom-over-and-back').mainModule;
-    overAndBack.setEnabled(true);
-    expect(overAndBack).toBeDefined();
-    expect(overAndBack.isEnabled()).toBe(true);
-
-    var ravenEditor = getEditorWithTheRaven();
-    ravenEditor.moveToTop();
-    ravenEditor.moveDown(6);
-    ravenEditor.moveDown(10);
-    expect(ravenEditor.getCursorBufferPosition().row).toBe(16);
-    expect(overAndBack.getNumWaypoints()).toBe(2);
-    waitsForPromise(() => {
-      return overAndBack.navigateBackward().then(() => {
-        expect(ravenEditor.getCursorBufferPosition().row).toBe(6);
+    describe('with 2 valid waypoints', () => {
+      beforeEach(() => {
+        ravenEditor.moveToTop();
+        ravenEditor.moveDown(6);
+        ravenEditor.moveDown(10);
+        expect(ravenEditor.getCursorBufferPosition().row).toBe(16);
         expect(overAndBack.getNumWaypoints()).toBe(2);
-        waitsForPromise(() => {
-            return overAndBack.navigateForward().then(() => {
-              expect(ravenEditor.getCursorBufferPosition().row).toBe(16);
-            });
-        });
       });
-    });
-  });
 
-  it ('should be able to navigate forward and backward within a file multiple times', () => {
-    jasmine.attachToDOM(workspaceElement);
+      describe ('with a single backwards navigation', () => {
+        beforeEach(() => {
+          waitsForPromise(() => {
+            return overAndBack.navigateBackward();
+          });
+        });
 
-    let overAndBack = atom.packages.getActivePackage('atom-over-and-back').mainModule;
-    expect(overAndBack).toBeDefined();
-    overAndBack.setEnabled(true);
-    expect(overAndBack.isEnabled()).toBe(true);
-
-    var ravenEditor = getEditorWithTheRaven();
-    var originalPosition = ravenEditor.getCursorBufferPosition();
-    ravenEditor.moveDown(20);
-    ravenEditor.moveDown(24);
-    ravenEditor.moveDown(34);
-
-    expect(overAndBack.getNumWaypoints()).toBe(3);
-
-    waitsForPromise(() => {
-      return overAndBack.navigateBackward().then(() => {
-        expect(ravenEditor.getCursorBufferPosition().row).toBe(44);
-
-        waitsForPromise(() => {
-          return overAndBack.navigateForward().then(() => {
-            expect(ravenEditor.getCursorBufferPosition().row).toBe(78);
-
+        describe ('with a single forwards navigation', () => {
+          beforeEach(() => {
+            expect(ravenEditor.getCursorBufferPosition().row).toBe(6);
+            expect(overAndBack.getNumWaypoints()).toBe(2);
             waitsForPromise(() => {
-              return overAndBack.navigateBackward().then(() => {
-                waitsForPromise(() => {
-                  return overAndBack.navigateBackward().then(() => {
-                    expect(ravenEditor.getCursorBufferPosition().row).toBe(20);
-                  });
-                });
-              });
+                return overAndBack.navigateForward();
             });
+          });
+
+          it ('should show the cursor in its original starting position', () => {
+            expect(ravenEditor.getCursorBufferPosition().row).toBe(16);
           });
         });
       });
     });
   });
 
-  it ('should be able to navigate backward between files', () => {
-    jasmine.attachToDOM(workspaceElement);
+  describe('with a single editor containing greek letters', () => {
+    let reasonGiven = null;
+    let greekLetterEditor = null;
 
-    let overAndBack = atom.packages.getActivePackage('atom-over-and-back').mainModule;
-    expect(overAndBack).toBeDefined();
+    beforeEach(() => {
+      greekLetterEditor = getEditorWithGreekLetters();
+    });
 
-    overAndBack.setEnabled(false);
+    it ('should add a waypoint when navigating > 5 lines', () => {
+      greekLetterEditor.moveDown(6);
 
-    let ravenEditor = getEditorWithTheRaven();
-    let greekLetterEditor = getEditorWithGreekLetters();
+      expect(overAndBack.getNumWaypoints()).toBe(1);
+    });
 
-    overAndBack.setEnabled(true);
-    expect(overAndBack.isEnabled()).toBe(true);
+    describe ('with 3 valid waypoints', () => {
+      beforeEach(() => {
+        greekLetterEditor.moveToTop();
+        greekLetterEditor.moveDown(10);
+        greekLetterEditor.moveUp(6);
+        greekLetterEditor.moveDown(6);
 
-    waitsForPromise(() => {
-      return atom.workspace.open(greekLetterEditor.getPath(), {
-        'initialLine': 7
-      }).then((editor) => {
-        expect(editor).toBe(atom.workspace.getActiveTextEditor());
-        expect(overAndBack.getNumWaypoints()).toBe(1);
+        expect(greekLetterEditor.getCursorBufferPosition().row).toBe(10);
+        expect(overAndBack.getNumWaypoints()).toBe(3);
+      });
+
+      describe ('with backwards navigation', () => {
+        beforeEach(() => {
+          waitsForPromise(() => {
+            return overAndBack.navigateBackward();
+          });
+        });
+
+        it ('should show the waypoint as having been navigated to', () => {
+          expect(greekLetterEditor.getCursorBufferPosition().row).toBe(4);
+        });
+      });
+    });
+
+    describe ('with no waypoints and attempted forwards navigation', () => {
+      beforeEach(() => {
+        var originalPosition = greekLetterEditor.getCursorBufferPosition();
+        waitsForPromise(() => {
+          return overAndBack.navigateForward().catch((reason) => {
+            reasonGiven = reason;
+          });
+        });
+      });
+
+      it ("should report that no waypoints are available forward", () => {
+        expect(reasonGiven).toBe('no waypoints forward');
+      });
+    });
+
+    describe ('with no waypoints and attempted backwards navigation', () => {
+      beforeEach(() => {
+        var originalPosition = greekLetterEditor.getCursorBufferPosition();
+        waitsForPromise(() => {
+          return overAndBack.navigateBackward().catch((reason) => {
+            reasonGiven = reason;
+          });
+        });
+      });
+
+      it ("should report that no waypoints are available backward", () => {
+        expect(reasonGiven).toBe('no waypoints backward');
+      });
+    });
+
+    describe('when overAndBack module is disabled', () => {
+      beforeEach(() => {
+        atom.commands.dispatch(workspaceElement, 'atom-over-and-back:toggle');
+
+        waitsFor(() => {
+          return !overAndBack.isEnabled();
+        });
+
+        runs(() => {
+          expect(overAndBack.isEnabled()).toBe(false);
+        });
+      });
+
+      it ('should not add a waypoint when navigating', () => {
+        greekLetterEditor.moveDown(6);
+        expect(overAndBack.getNumWaypoints()).toBe(0);
+      });
+    });
+
+    describe ('with another editor containing The Raven and the editor containing greek letters at line 7', () => {
+      let ravenEditor = null;
+      beforeEach(() => {
+        ravenEditor = getEditorWithTheRaven();
 
         waitsForPromise(() => {
-          return atom.workspace.open(ravenEditor.getPath(), {
-            'initialLine': 37
-          }).then((secondEditor) => {
-            expect(secondEditor).toBe(atom.workspace.getActiveTextEditor());
+          return atom.workspace.open(greekLetterEditor.getPath(), {
+            'initialLine': 7
+          });
+        });
+      });
+
+      describe ('with editor containing The Raven at line 37', () => {
+        beforeEach(() => {
+          expect(greekLetterEditor).toBe(atom.workspace.getActiveTextEditor());
+          expect(overAndBack.getNumWaypoints()).toBe(1);
+
+          waitsForPromise(() => {
+            return atom.workspace.open(ravenEditor.getPath(), {
+              'initialLine': 37
+            });
+          });
+        });
+
+        describe ('after navigating backward', () => {
+          beforeEach(() => {
+            expect(ravenEditor).toBe(atom.workspace.getActiveTextEditor());
             expect(overAndBack.getNumWaypoints()).toBe(2);
             expect(atom.workspace.getActiveTextEditor().getCursorBufferPosition().row).toBe(37);
             waitsForPromise(() => {
-              return overAndBack.navigateBackward().then(() => {
-                expect(atom.workspace.getActiveTextEditor().getPath()).toBe(editor.getPath());
-                expect(editor.getCursorBufferPosition().row).toBe(7);
+              return overAndBack.navigateBackward();
+            });
+          });
+
+          it ('should show the cursor to be on line 7 of the editor containing greek letters', () => {
+            expect(atom.workspace.getActiveTextEditor().getPath()).toBe(greekLetterEditor.getPath());
+            expect(atom.workspace.getActiveTextEditor().getCursorBufferPosition().row).toBe(7);
+          });
+
+          describe ('after navigating forward', () => {
+            beforeEach(() => {
+              waitsForPromise(() => {
+                return overAndBack.navigateForward();
               });
+            });
+
+            it ('should show the cursor to be on line 37 of the editor containing The Raven', () => {
+              expect(atom.workspace.getActiveTextEditor().getPath()).toBe(ravenEditor.getPath());
+              expect(atom.workspace.getActiveTextEditor().getCursorBufferPosition().row).toBe(37);
             });
           });
         });
       });
     });
-  });
 
-  it ('should be able to navigate forward between files', () => {
-    jasmine.attachToDOM(workspaceElement);
-
-    let overAndBack = atom.packages.getActivePackage('atom-over-and-back').mainModule;
-    expect(overAndBack).toBeDefined();
-
-    overAndBack.setEnabled(false);
-
-    let ravenEditor = getEditorWithTheRaven();
-    let greekLetterEditor = getEditorWithGreekLetters();
-
-    overAndBack.setEnabled(true);
-    expect(overAndBack.isEnabled()).toBe(true);
-
-    waitsForPromise(() => {
-      return atom.workspace.open(greekLetterEditor.getPath(), {
-        'initialLine': 7
-      }).then((editor) => {
-        expect(editor).toBe(atom.workspace.getActiveTextEditor());
-        expect(overAndBack.getNumWaypoints()).toBe(1);
-
+    describe ('after opening a new editor that has not been saved', () => {
+      let unsavedEditor = null;
+      beforeEach(() => {
         waitsForPromise(() => {
-          return atom.workspace.open(ravenEditor.getPath(), {
-            'initialLine': 37
-          }).then((secondEditor) => {
-            expect(secondEditor).toBe(atom.workspace.getActiveTextEditor());
-            expect(overAndBack.getNumWaypoints()).toBe(2);
-            expect(atom.workspace.getActiveTextEditor().getCursorBufferPosition().row).toBe(37);
-            waitsForPromise(() => {
-              return overAndBack.navigateBackward().then(() => {
-                expect(atom.workspace.getActiveTextEditor().getPath()).toBe(editor.getPath());
-                expect(editor.getCursorBufferPosition().row).toBe(7);
+          return atom.workspace.open();
+        });
+      });
 
+      describe('after adding the text of Jamaica Mistaka to the new editor', () => {
+        beforeEach(() => {
+          let editor = atom.workspace.getActiveTextEditor();
+          editor.setText(`Some folks say that I've got the perfect life
+Three swell kids, lots of toys and a lovely wife
+I fly, I sail, I throw caution to the wind
+Drift like a stratus cloud above the Caribbean
+But every now and then, the dragons come to call
+Just when you least expect it you'll be dodgin' cannonballs
+I've seen too much not to stay in touch
+With a world full of love and luck
+I've got a big suspicion 'bout ammunition
+I never forget to duck
+Come back, come back back to Jamaica
+Don't chu know we made a big mistaica
+We'd be so sad if you told us good-bye
+And we promise not to shoot you out of the sky
+It was a beautiful day, the kind you want to toast
+We were tree top flyin' movin' west along the coast
+Then we landed in the water, just about my favorite thrill
+When some asshole started firing as we taxied to Negril
+Just about to lose my temper as I endeavored to explain
+We had only come for chicken we were not a ganja plane
+Well, you should have seen their faces when they finally realized
+We were not some coked up cowboy sporting guns and alibis
+Come back, come back back to Jamaica
+Don't chu know we made a big mistaica
+We'd be so sad if you told us good-bye
+And we promise not to shoot you out of the sky
+They shot from the lighthouse, they shot from highway
+They shot from the top of the cliff, they had all gone haywire
+We're catchin' fire, and there wasn't even a spliff
+Well, the word got out all over the island
+Friends, strangers, they were all apologizin'
+Some thought me crazy foe being way too nice
+But it's just another shitty day in paradise
+Come back, come back back to Jamaica
+Don't chu know we made a big mistaica
+We'd be so sad if you told us good-bye
+And we promise not to shoot you out of the sky`);
+
+          overAndBack.setEnabled(false);
+          editor.moveToTop();
+          overAndBack.setEnabled(true);
+          editor.moveDown(15);
+        });
+
+        describe('and moving to line 7 of the editor with greek letters in it', () => {
+          beforeEach(() => {
+            waitsForPromise(() => {
+              return atom.workspace.open(greekLetterEditor.getPath(), {
+                'initialLine': 7
+              });
+            });
+          });
+
+          describe ('after adding a new editor with nothing in it', () => {
+            beforeEach(() => {
+              overAndBack.displayAllWaypoints();
+              waitsForPromise(() => {
+                return atom.workspace.open();
+              });
+            });
+
+            describe ('after navigating back', () => {
+              beforeEach(() => {
+                overAndBack.displayAllWaypoints();
+                let activeEditor = atom.workspace.getActiveTextEditor();
+                expect(activeEditor.lineTextForBufferRow(activeEditor.getCursorBufferPosition().row)).toBe("");
                 waitsForPromise(() => {
-                  return overAndBack.navigateForward().then(() => {
-                    expect(atom.workspace.getActiveTextEditor().getPath()).toBe(secondEditor.getPath());
-                    expect(atom.workspace.getActiveTextEditor().getCursorBufferPosition().row).toBe(37);
+                  return overAndBack.navigateBackward();
+                });
+              });
+
+              describe ('after navigating back', () => {
+                beforeEach(() => {
+                  waitsForPromise(() => {
+                    return overAndBack.navigateBackward();
                   });
                 });
+
+                it ('should show the cursor as being at line 15 of the unnamed editor containing Jamaica Mistaka', () => {
+                  overAndBack.displayAllWaypoints();
+                  let currentEditor = atom.workspace.getActiveTextEditor();
+                  expect(currentEditor.getCursorBufferPosition().row).toBe(15);
+                  expect(currentEditor.lineTextForBufferRow(currentEditor.getCursorBufferPosition().row)).toBe("We were tree top flyin' movin' west along the coast");
+                });
+              });
+            });
+          });
+
+          describe ('after navigating back', () => {
+            beforeEach(() => {
+              expect(overAndBack.getNumWaypoints()).toBe(2);
+
+              waitsForPromise(() => {
+                return overAndBack.navigateBackward();
+              });
+            });
+
+            it ('should show the cursor as being at line 15 of the unnamed editor containing Jamaica Mistaka', () => {
+              let currentEditor = atom.workspace.getActiveTextEditor();
+              expect(currentEditor.getCursorBufferPosition().row).toBe(15);
+              expect(currentEditor.lineTextForBufferRow(currentEditor.getCursorBufferPosition().row)).toBe("We were tree top flyin' movin' west along the coast");
+            });
+
+            describe ('after navigating forward again', () => {
+              beforeEach(() => {
+                waitsForPromise(() => {
+                  return overAndBack.navigateForward();
+                });
+              });
+
+              it ('should show the cursor on line 7 of the editor containing greek letters', () => {
+                let newCurEditor = atom.workspace.getActiveTextEditor();
+
+                expect(newCurEditor.getCursorBufferPosition().row).toBe(7);
+                expect(newCurEditor.getPath()).toBe(greekLetterEditor.getPath());
               });
             });
           });
@@ -341,13 +497,13 @@ describe('basic functionality', () => {
   });
 });
 
-describe('waypoint coalescing functionality', () => {
+describe('Generic Waypoint Management', () => {
   beforeEach(() => {
     setupTestFramework();
   });
 
-  it('should merge two waypoints iff they differ by less than one line', () => {
-    let waypoint1 = new Waypoint('blah.txt', 1);
+  it ('should merge two waypoints iff they differ by less than one line', () => {
+    let waypoint1 = new Waypoint('blah.txt', -1, 1);
     let waypoint2 = null;
 
     let merged = Waypoint.merge(waypoint1, waypoint2);
@@ -356,29 +512,29 @@ describe('waypoint coalescing functionality', () => {
     expect(merged[0].equals(waypoint1)).toBe(true);
 
     waypoint1 = null;
-    waypoint2 = new Waypoint('helloWorld.txt', 15);
+    waypoint2 = new Waypoint('helloWorld.txt', -1, 15);
     merged = Waypoint.merge(waypoint1, waypoint2);
     expect(merged).not.toBe(null);
     expect(merged).toHaveLength(1);
     expect(merged[0].equals(waypoint2)).toBe(true);
 
-    waypoint1 = new Waypoint('nothing.txt', 17);;
-    waypoint2 = new Waypoint('helloWorld.txt', 15);
+    waypoint1 = new Waypoint('nothing.txt', -1, 17);;
+    waypoint2 = new Waypoint('helloWorld.txt', -1, 15);
     merged = Waypoint.merge(waypoint1, waypoint2);
     expect(merged).not.toBe(null);
     expect(merged).toHaveLength(2);
     expect(merged[0].equals(waypoint1)).toBe(true);
     expect(merged[1].equals(waypoint2)).toBe(true);
 
-    waypoint1 = new Waypoint('helloWorld.txt', 14);;
-    waypoint2 = new Waypoint('helloWorld.txt', 15);
+    waypoint1 = new Waypoint('helloWorld.txt', -1, 14);;
+    waypoint2 = new Waypoint('helloWorld.txt', -1, 15);
     merged = Waypoint.merge(waypoint1, waypoint2);
     expect(merged).not.toBe(null);
     expect(merged).toHaveLength(1);
     expect(merged[0].equals(waypoint2)).toBe(true);
 
-    waypoint1 = new Waypoint('helloWorld.txt', 17);;
-    waypoint2 = new Waypoint('helloWorld.txt', 16);
+    waypoint1 = new Waypoint('helloWorld.txt', -1, 17);;
+    waypoint2 = new Waypoint('helloWorld.txt', -1, 16);
     merged = Waypoint.merge(waypoint1, waypoint2);
     expect(merged).not.toBe(null);
     expect(merged).toHaveLength(1);
@@ -410,5 +566,57 @@ describe('waypoint coalescing functionality', () => {
     expect(overAndBack.getNumWaypoints()).toBe(2);
     expect(ravenEditor.getCursorBufferPosition().row).toBe(8);
     expect(overAndBack.peekWaypoint().lineNumber).toBe(0);
+  });
+
+  it ('should remove all references to waypoints in the stack with a given tabIndex if told to', () => {
+    jasmine.attachToDOM(workspaceElement);
+
+    let overAndBack = atom.packages.getActivePackage('atom-over-and-back').mainModule;
+    expect(overAndBack).toBeDefined();
+
+    let waypoint1 = new Waypoint('blak', -1, 13);
+    let waypoint2 = new Waypoint(null, 1, 44);
+    let waypoint3 = new Waypoint('foo', -1, 1);
+    let waypoint4 = new Waypoint(null, 3, 22);
+    let waypoint5 = new Waypoint(null, 1, 16);
+
+    overAndBack.addWaypoint(waypoint1);
+    overAndBack.addWaypoint(waypoint2);
+    overAndBack.addWaypoint(waypoint3);
+    overAndBack.addWaypoint(waypoint4);
+    overAndBack.currentWaypoint = waypoint5;
+
+    expect(overAndBack.getNumWaypoints()).toBe(5);
+
+    overAndBack.updateWaypointsForTabChange(1, -1);
+
+    expect(overAndBack.getNumWaypoints()).toBe(3);
+    expect(overAndBack.currentWaypoint.tabIndex).toBe(2);
+  });
+
+  it ("should update all references to tabs in the stack after a 'tab added' event, when told to do so", () => {
+    jasmine.attachToDOM(workspaceElement);
+
+    let overAndBack = atom.packages.getActivePackage('atom-over-and-back').mainModule;
+    expect(overAndBack).toBeDefined();
+
+    let waypoint1 = new Waypoint('blak', -1, 13);
+    let waypoint2 = new Waypoint(null, 1, 44);
+    let waypoint3 = new Waypoint('foo', -1, 1);
+    let waypoint4 = new Waypoint(null, 3, 22);
+    let waypoint5 = new Waypoint(null, 1, 16);
+
+    overAndBack.addWaypoint(waypoint1);
+    overAndBack.addWaypoint(waypoint2);
+    overAndBack.addWaypoint(waypoint3);
+    overAndBack.addWaypoint(waypoint4);
+    overAndBack.currentWaypoint = waypoint5;
+
+    expect(overAndBack.getNumWaypoints()).toBe(5);
+
+    overAndBack.updateWaypointsForTabChange(1, 1);
+
+    expect(overAndBack.getNumWaypoints()).toBe(5);
+    expect(overAndBack.currentWaypoint.tabIndex).toBe(2);
   });
 });
